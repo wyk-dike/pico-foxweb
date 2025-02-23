@@ -14,10 +14,10 @@ httpd.o: httpd.c httpd.h
 	gcc -c -o httpd.o httpd.c
 
 
-BASE_PATH = $(CURDIR)/PICO-Foxweb
-INSTALL_PATH = $(BASE_PATH)/bin
-SERVICE_PATH = /etc/systemd/system
-WEBROOT_PATH = $(BASE_PATH)/webroot
+BASE_PATH=/APP/PICOFoxweb
+INSTALL_PATH=$(BASE_PATH)/bin
+SERVICE_PATH=/etc/systemd/system
+WEBROOT_PATH=$(BASE_PATH)/webroot
 
 install: PICOFoxweb
 	mkdir -p $(INSTALL_PATH)

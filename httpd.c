@@ -11,6 +11,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <time.h> // 添加时间处理
+#include <sys/stat.h> // 文件权限处理
+#include <netinet/in.h>
+
 #define MAX_CONNECTIONS 1000
 #define BUF_SIZE 65535
 #define QUEUE_SIZE 1000000
@@ -29,7 +33,11 @@ char *method, // "GET" or "POST"
     *prot,    // "HTTP/1.1"
     *payload; // for POST
 
+// 状态码
+int status_code = 0;
+
 int payload_size;
+
 
 void serve_forever(const char *PORT) {
   struct sockaddr_in clientaddr;
@@ -159,6 +167,16 @@ static void uri_unescape(char *uri) {
 
 // client connection
 void respond(int slot) {
+    // 获取客户端IP至 “ client_ip ”
+    // 客户端地址
+    struct sockaddr_in client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    // 获取客户端地址信息至 “ client_addr ”
+    getpeername(clients[slot], (struct sockaddr*)&client_addr, &addr_len);
+    // 转换为可读IP字符串
+    char client_ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+
   int rcvd;
 
   buf = malloc(BUF_SIZE);
@@ -221,6 +239,9 @@ void respond(int slot) {
     // call router
     route();
 
+    // 在 respond 函数的 route() 调用后执行
+    //write_access_log(client_ip, method, uri, status_code, rcvd);
+
     // tidy up
     fflush(stdout);
     shutdown(STDOUT_FILENO, SHUT_WR);
@@ -228,4 +249,33 @@ void respond(int slot) {
   }
 
   free(buf);
+}
+
+// syslog
+// 写入访问日志 （客户端IP， 方法， uri，状态， 数据大小）
+void write_access_log(const char* client_ip, const char* method, const char* uri, int status, int data_size) {
+    // 创建日志文件（如果不存在）
+    FILE* logFile = fopen("/APP/PICOFoxweb/log/PICOFoxweb_log.log", "a");
+
+    if (logFile != NULL) {
+        // 获取当前时间
+        time_t nowTime = time(NULL);
+        struct tm* tm = localtime(&nowTime);
+        char timestamp[64];
+        strftime(timestamp, sizeof(timestamp), "%d/%b/%Y:%H:%M:%S %z", tm);
+
+        // 写入日志
+        fprintf(logFile, "%s - - [%s] \"%s %s HTTP/1.1\" %d (%ld bytes)\n",
+            client_ip,
+            timestamp,
+            method,
+            uri,
+            status,
+            data_size);
+
+        fclose(logFile);
+    }
+
+    // 设置文件权限（如果首次创建）
+    chmod("/APP/PICOFoxweb/log/PICOFoxweb_log.log", 0644);
 }

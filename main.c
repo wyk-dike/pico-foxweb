@@ -1,16 +1,29 @@
 #include "httpd.h"
 #include <sys/stat.h>
 
+// syslog 头文件
+#include <syslog.h>
+
 #define CHUNK_SIZE 1024 // read 1024 bytes at a time
 
 // Public directory settings
-#define PUBLIC_DIR "../webroot"
+#define PUBLIC_DIR "/APP/PICOFoxweb/webroot" // 已修改此处路径
 #define INDEX_HTML "/index.html"
 #define NOT_FOUND_HTML "/404.html"
 
+
 int main(int c, char **v) {
   char *port = c == 1 ? "8000" : v[1];
+
+  // syslog
+  // syslog初始化
+  openlog("PICOFoxweb", LOG_PID | LOG_CONS, LOG_DAEMON);
+  // 写入一句话到日志，优先级为 “ LOG_INFO ”
+  syslog(LOG_INFO, "Service started on port %s", port);
+
   serve_forever(port);
+
+  closelog();
   return 0;
 }
 
