@@ -171,11 +171,20 @@ void respond(int slot) {
     // 客户端地址
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
+    // 初始化默认值
+    char client_ip[INET_ADDRSTRLEN] = "unknown";
     // 获取客户端地址信息至 “ client_addr ”
-    getpeername(clients[slot], (struct sockaddr*)&client_addr, &addr_len);
-    // 转换为可读IP字符串
-    char client_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+    int gpn = getpeername(clients[slot], (struct sockaddr*)&client_addr, &addr_len);
+    // 检查getpeername是否成功
+    if (gpn == 0) {
+        // 成功获取客户端地址信息
+        // 转换为可读IP字符串 并 检查inet_ntop是否成功
+        if (inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip)) == NULL) {
+            // 不成功
+            strcpy(client_ip, "invalid");
+        }
+    }
+    
 
   int rcvd;
 
@@ -240,7 +249,7 @@ void respond(int slot) {
     route();
 
     // 在 respond 函数的 route() 调用后执行
-    //write_access_log(client_ip, method, uri, status_code, rcvd);
+    write_access_log(client_ip, method, uri, status_code, rcvd);
 
     // tidy up
     fflush(stdout);
@@ -254,6 +263,8 @@ void respond(int slot) {
 // syslog
 // 写入访问日志 （客户端IP， 方法， uri，状态， 数据大小）
 void write_access_log(const char* client_ip, const char* method, const char* uri, int status, int data_size) {
+    // 确保日志目录存在
+    mkdir("/APP/PICOFoxweb/log", 0755); // 自动创建目录
     // 创建日志文件（如果不存在）
     FILE* logFile = fopen("/APP/PICOFoxweb/log/PICOFoxweb_log.log", "a");
 
@@ -265,7 +276,7 @@ void write_access_log(const char* client_ip, const char* method, const char* uri
         strftime(timestamp, sizeof(timestamp), "%d/%b/%Y:%H:%M:%S %z", tm);
 
         // 写入日志
-        fprintf(logFile, "%s - - [%s] \"%s %s HTTP/1.1\" %d (%ld bytes)\n",
+        fprintf(logFile, "%s - - [%s] \"%s %s HTTP/1.1\" %d (%d bytes)\n",
             client_ip,
             timestamp,
             method,

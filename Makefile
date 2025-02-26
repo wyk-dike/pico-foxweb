@@ -23,7 +23,7 @@ install: PICOFoxweb
 	mkdir -p $(INSTALL_PATH)
 	install -o root -g root -m 755 PICOFoxweb $(INSTALL_PATH)/
 
-	sed -i 's|^ExecStart=.*|ExecStart=$(INSTALL_PATH)/PICOFoxweb 8080|' pico-foxweb.service
+	# sed -i 's|^ExecStart=.*|ExecStart=$(INSTALL_PATH)/PICOFoxweb|' pico-foxweb.service
 	install -o root -g root -m 644 pico-foxweb.service $(SERVICE_PATH)/
 	systemctl daemon-reload
 
