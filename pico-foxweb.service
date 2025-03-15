@@ -3,12 +3,10 @@ Description=Pico-Foxweb Server
 After=network.target
 
 [Service]
-ExecStart=/APP/PICOFoxweb/bin/PICOFoxweb 8080
-WorkingDirectory=/APP/PICOFoxweb/bin
+ExecStart=/usr/local/sbin/PICOFoxweb 8080
 KillMode=control-group
-Restart=on-failure
-User=root
-Group=root
+User=picouser
+Group=picouser
 
 [Install]
 WantedBy=multi-user.target

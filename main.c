@@ -1,29 +1,24 @@
 #include "httpd.h"
 #include <sys/stat.h>
 
-// syslog 头文件
 #include <syslog.h>
 
 #define CHUNK_SIZE 1024 // read 1024 bytes at a time
 
 // Public directory settings
-#define PUBLIC_DIR "/APP/PICOFoxweb/webroot" // 已修改此处路径
+#define PUBLIC_DIR "/var/www/PICO-Foxweb"
 #define INDEX_HTML "/index.html"
 #define NOT_FOUND_HTML "/404.html"
-
 
 int main(int c, char **v) {
   char *port = c == 1 ? "8000" : v[1];
 
   // syslog
-  // syslog初始化
-  openlog("PICOFoxweb", LOG_PID | LOG_CONS, LOG_DAEMON);
-  // 写入一句话到日志，优先级为 “ LOG_INFO ”
-  syslog(LOG_INFO, "Service started on port %s", port);
+  // Запись содержимого журнала в системный журнал 
+  // 将日志内容写入系统日志
+  syslog(LOG_INFO, "Service started on port %s; Resource Working Catalogue: %s", port, PUBLIC_DIR);
 
   serve_forever(port);
-
-  closelog();
   return 0;
 }
 
@@ -54,7 +49,11 @@ int read_file(const char *file_name) {
   return err;
 }
 
-void route() {
+// void route() {}
+int route() {
+  // code
+  int code = 0;
+  
   ROUTE_START()
 
   GET("/") {
@@ -62,6 +61,7 @@ void route() {
     sprintf(index_html, "%s%s", PUBLIC_DIR, INDEX_HTML);
 
     HTTP_200;
+    code = 200;
     if (file_exists(index_html)) {
       read_file(index_html);
     } else {
@@ -71,6 +71,7 @@ void route() {
 
   GET("/test") {
     HTTP_200;
+    code = 200;
     printf("List of request headers:\n\n");
 
     header_t *h = request_headers();
@@ -83,6 +84,7 @@ void route() {
 
   POST("/") {
     HTTP_201;
+    code = 201;
     printf("Wow, seems that you POSTed %d bytes.\n", payload_size);
     printf("Fetch the data using `payload` variable.\n");
     if (payload_size > 0)
@@ -95,9 +97,11 @@ void route() {
 
     if (file_exists(file_name)) {
       HTTP_200;
+      code = 200;
       read_file(file_name);
     } else {
       HTTP_404;
+      code = 404;
       sprintf(file_name, "%s%s", PUBLIC_DIR, NOT_FOUND_HTML);
       if (file_exists(file_name))
         read_file(file_name);
@@ -105,4 +109,6 @@ void route() {
   }
 
   ROUTE_END()
+
+  return code;
 }

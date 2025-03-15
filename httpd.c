@@ -11,9 +11,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <time.h> // 添加时间处理
-#include <sys/stat.h> // 文件权限处理
-#include <netinet/in.h>
+#include <time.h>
 
 #define MAX_CONNECTIONS 1000
 #define BUF_SIZE 65535
@@ -22,7 +20,7 @@
 static int listenfd;
 int *clients;
 static void start_server(const char *);
-static void respond(int);
+static void respond(int, struct sockaddr_in, socklen_t);
 
 static char *buf;
 
@@ -33,11 +31,7 @@ char *method, // "GET" or "POST"
     *prot,    // "HTTP/1.1"
     *payload; // for POST
 
-// 状态码
-int status_code = 0;
-
 int payload_size;
-
 
 void serve_forever(const char *PORT) {
   struct sockaddr_in clientaddr;
@@ -45,8 +39,7 @@ void serve_forever(const char *PORT) {
 
   int slot = 0;
 
-  printf("Server started %shttp://127.0.0.1:%s%s\n", "\033[92m", PORT,
-         "\033[0m");
+  //printf("Server started %shttp://127.0.0.1:%s%s\n", "\033[92m", PORT, "\033[0m");
 
   // create shared memory for client slot array
   clients = mmap(NULL, sizeof(*clients) * MAX_CONNECTIONS,
@@ -72,7 +65,7 @@ void serve_forever(const char *PORT) {
     } else {
       if (fork() == 0) {
         close(listenfd);
-        respond(slot);
+        respond(slot, clientaddr, addrlen);
         close(clients[slot]);
         clients[slot] = -1;
         exit(0);
@@ -166,11 +159,8 @@ static void uri_unescape(char *uri) {
 }
 
 // client connection
-void respond(int slot) {
-    // 获取客户端IP至 “ client_ip ”
-    // 客户端地址
-    struct sockaddr_in client_addr;
-    socklen_t addr_len = sizeof(client_addr);
+void respond(int slot, struct sockaddr_in client_addr, socklen_t addr_len) {
+    // Получить IP-адрес клиента
     // 初始化默认值
     char client_ip[INET_ADDRSTRLEN] = "unknown";
     // 获取客户端地址信息至 “ client_addr ”
@@ -184,7 +174,6 @@ void respond(int slot) {
             strcpy(client_ip, "invalid");
         }
     }
-    
 
   int rcvd;
 
@@ -246,9 +235,11 @@ void respond(int slot) {
     close(clientfd);
 
     // call router
-    route();
+    int status_code = route();
 
-    // 在 respond 函数的 route() 调用后执行
+    // log
+    // Запись содержимого журнала в пользовательский текстовый журнал(IP клиента, метод, uri, статус, размер данных)
+    // 将日志内容写入自定义文本日志 （客户端IP， 方法， uri，状态， 数据大小）
     write_access_log(client_ip, method, uri, status_code, rcvd);
 
     // tidy up
@@ -260,21 +251,23 @@ void respond(int slot) {
   free(buf);
 }
 
-// syslog
-// 写入访问日志 （客户端IP， 方法， uri，状态， 数据大小）
+// log
+// Запись содержимого журнала в пользовательский текстовый журнал(IP клиента, метод, uri, статус, размер данных)
+// 将日志内容写入自定义文本日志 （客户端IP， 方法， uri，状态， 数据大小）
 void write_access_log(const char* client_ip, const char* method, const char* uri, int status, int data_size) {
-    // 确保日志目录存在
-    mkdir("/APP/PICOFoxweb/log", 0755); // 自动创建目录
+    // Создайте файл журнала(если он не существует)
     // 创建日志文件（如果不存在）
-    FILE* logFile = fopen("/APP/PICOFoxweb/log/PICOFoxweb_log.log", "a");
+    FILE* logFile = fopen("/var/log/PICOFoxweb_log.log", "a");
 
     if (logFile != NULL) {
+        // Получить текущее время
         // 获取当前时间
         time_t nowTime = time(NULL);
         struct tm* tm = localtime(&nowTime);
         char timestamp[64];
         strftime(timestamp, sizeof(timestamp), "%d/%b/%Y:%H:%M:%S %z", tm);
 
+        // Запись в журнал
         // 写入日志
         fprintf(logFile, "%s - - [%s] \"%s %s HTTP/1.1\" %d (%d bytes)\n",
             client_ip,
@@ -286,7 +279,4 @@ void write_access_log(const char* client_ip, const char* method, const char* uri
 
         fclose(logFile);
     }
-
-    // 设置文件权限（如果首次创建）
-    chmod("/APP/PICOFoxweb/log/PICOFoxweb_log.log", 0644);
 }

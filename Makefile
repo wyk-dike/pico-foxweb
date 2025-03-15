@@ -14,26 +14,22 @@ httpd.o: httpd.c httpd.h
 	gcc -c -o httpd.o httpd.c
 
 
-BASE_PATH=/APP/PICOFoxweb
-INSTALL_PATH=$(BASE_PATH)/bin
-SERVICE_PATH=/etc/systemd/system
-WEBROOT_PATH=$(BASE_PATH)/webroot
-
 install: PICOFoxweb
-	mkdir -p $(INSTALL_PATH)
-	install -o root -g root -m 755 PICOFoxweb $(INSTALL_PATH)/
-
-	# sed -i 's|^ExecStart=.*|ExecStart=$(INSTALL_PATH)/PICOFoxweb|' pico-foxweb.service
-	install -o root -g root -m 644 pico-foxweb.service $(SERVICE_PATH)/
+	useradd -c "PICOFoxweb project user" -r -s /sbin/nologin -d /var/www/PICO-Foxweb picouser
+	mkdir -p /var/www/PICO-Foxweb
+	cp -r ./webroot/* /var/www/PICO-Foxweb
+	chown -R picouser:picouser /var/www/PICO-Foxweb
+	install -o root -g root -m 0755 PICOFoxweb /usr/local/sbin/
+	install -o root -g root -m 0644 pico-foxweb.service /etc/systemd/system/
+	chown -R picouser:picouser /var/log
 	systemctl daemon-reload
 
-	mkdir -p $(WEBROOT_PATH)
-	cp -r webroot/* $(WEBROOT_PATH)/
-	chown -R root:root $(WEBROOT_PATH)
-	chmod -R 755 $(WEBROOT_PATH)
 
 uninstall:
 	systemctl stop pico-foxweb.service
-	rm -rf $(BASE_PATH)
-	rm -f $(SERVICE_PATH)/pico-foxweb.service
+	rm -rf /var/www/PICO-Foxweb
+	rm -f /usr/local/sbin/PICOFoxweb
+	rm -f /etc/systemd/system/pico-foxweb.service
+	rm -f /var/log/PICOFoxweb_log.log
+	userdel -f picouser
 	systemctl daemon-reload
