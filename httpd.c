@@ -13,6 +13,12 @@
 
 #include <time.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+// 全局变量
+SSL_CTX *ssl_ctx = NULL;
+
 #define MAX_CONNECTIONS 1000
 #define BUF_SIZE 65535
 #define QUEUE_SIZE 1000000
@@ -33,7 +39,36 @@ char *method, // "GET" or "POST"
 
 int payload_size;
 
+
+// 初始化SSL上下文
+static void init_openssl() {
+    SSL_load_error_strings();
+    OpenSSL_add_ssl_algorithms();
+    ssl_ctx = SSL_CTX_new(TLS_server_method());
+    if (!ssl_ctx) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+}
+
+// 加载证书和私钥
+static void configure_ssl(const char* cert_file, const char* key_file) {
+    if (SSL_CTX_use_certificate_file(ssl_ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+    if (SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+}
+
+
 void serve_forever(const char *PORT) {
+    // 初始化OpenSSL
+    init_openssl();
+    configure_ssl("/etc/PICO-Foxweb/certs/server.crt", "/etc/PICO-Foxweb/certs/server.key");   
+
   struct sockaddr_in clientaddr;
   socklen_t addrlen;
 
@@ -175,10 +210,22 @@ void respond(int slot, struct sockaddr_in client_addr, socklen_t addr_len) {
         }
     }
 
+    // 创建SSL对象并绑定到套接字
+    SSL *ssl = SSL_new(ssl_ctx);
+    SSL_set_fd(ssl, clients[slot]);
+
+    // 执行SSL握手
+    if (SSL_accept(ssl) <= 0) {
+        ERR_print_errors_fp(stderr);
+        SSL_free(ssl);
+        return;
+    }
+
   int rcvd;
 
   buf = malloc(BUF_SIZE);
-  rcvd = recv(clients[slot], buf, BUF_SIZE, 0);
+  //rcvd = recv(clients[slot], buf, BUF_SIZE, 0);
+  rcvd = SSL_read(ssl, buf, BUF_SIZE);
 
   if (rcvd < 0) // receive error
     fprintf(stderr, ("recv() error\n"));
@@ -231,16 +278,20 @@ void respond(int slot, struct sockaddr_in client_addr, socklen_t addr_len) {
 
     // bind clientfd to stdout, making it easier to write
     int clientfd = clients[slot];
-    dup2(clientfd, STDOUT_FILENO);
-    close(clientfd);
+    //dup2(clientfd, STDOUT_FILENO);
+    //close(clientfd);
 
     // call router
-    int status_code = route();
+    int status_code = route(ssl);
 
     // log
     // Запись содержимого журнала в пользовательский текстовый журнал(IP клиента, метод, uri, статус, размер данных)
     // 将日志内容写入自定义文本日志 （客户端IP， 方法， uri，状态， 数据大小）
     write_access_log(client_ip, method, uri, status_code, rcvd);
+
+    // 清理SSL资源
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
 
     // tidy up
     fflush(stdout);
@@ -280,3 +331,5 @@ void write_access_log(const char* client_ip, const char* method, const char* uri
         fclose(logFile);
     }
 }
+
+
